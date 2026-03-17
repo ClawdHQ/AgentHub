@@ -73,7 +73,7 @@ contract AgentAccount is Initializable, IAgentAccount {
         uint256 missingAccountFunds
     ) external override onlyEntryPoint returns (uint256 validationData) {
         bytes32 ethSignedHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
-        (address recovered, ECDSA.RecoverError err, ) = ECDSA.tryRecover(ethSignedHash, userOp.signature);
+        (address recovered, ECDSA.RecoverError err,) = ECDSA.tryRecover(ethSignedHash, userOp.signature);
 
         if (err != ECDSA.RecoverError.NoError || recovered != aiSigner) {
             return SIG_VALIDATION_FAILED;

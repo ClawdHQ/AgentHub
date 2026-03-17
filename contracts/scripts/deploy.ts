@@ -8,7 +8,7 @@ async function main() {
 
   console.log(`\n🚀 Deploying AgentHub to network: ${network.name} (chainId: ${network.chainId})`);
   console.log(`📍 Deployer: ${deployer.address}`);
-  console.log(`💰 Balance: ${ethers.formatEther(await ethers.provider.getBalance(deployer.address))} DOT\n`);
+  console.log(`💰 Balance: ${ethers.formatEther(await ethers.provider.getBalance(deployer.address))} ETH\n`);
 
   const ENTRY_POINT_ADDRESS = "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789";
 
