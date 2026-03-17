@@ -43,7 +43,7 @@ export default function GuardianStatus({
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold">Guardian Status</h3>
         <span className="text-xs text-white/40">
-          {lastRefresh.toLocaleTimeString()}
+          {lastRefresh.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
         </span>
       </div>
 

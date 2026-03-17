@@ -1,5 +1,5 @@
-import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { keccak256, toHex } from "viem";
 
 // Rate limiting: in-memory store (per IP, per hour)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -14,11 +14,11 @@ const PROTOCOL_REGISTRY: Record<string, string> = {
 };
 
 /**
- * Convert a function signature string to a 4-byte selector
+ * Convert a function signature string to a 4-byte keccak256 selector
  */
 function toSelector(sig: string): string {
-  const hash = createHash("sha3-256").update(sig).digest("hex");
-  return "0x" + hash.slice(0, 8);
+  const hash = keccak256(toHex(sig));
+  return hash.slice(0, 10); // "0x" + 8 hex chars = 4 bytes
 }
 
 export async function POST(request: NextRequest) {
@@ -63,8 +63,8 @@ export async function POST(request: NextRequest) {
   try {
     // Default conservative policy without AI for now
     const tier = 0; // CONSERVATIVE
-    const maxSingleTxValue = "1000000000000000000"; // 1 ETH in wei
-    const maxDailyVolume = "5000000000000000000"; // 5 ETH in wei
+    const maxSingleTxValue = "1000000000000000000"; // 1 DOT in planck (1e18)
+    const maxDailyVolume = "5000000000000000000"; // 5 DOT in planck (1e18)
     const allowedProtocolNames = ["DOT Staking"];
     const allowedSelectors = ["stake(uint256)", "withdraw(uint256)"].map(toSelector);
     const xcmEnabled = false;
