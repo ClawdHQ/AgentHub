@@ -1,0 +1,42 @@
+type Agent @entity {
+  id: ID!
+  owner: Bytes!
+  aiSigner: Bytes!
+  strategyDescription: String!
+  riskTier: String!
+  active: Boolean!
+  createdAt: BigInt!
+  totalOpsExecuted: BigInt!
+  totalValueMoved: BigDecimal!
+  violationCount: BigInt!
+  operations: [Operation!]! @derivedFrom(field: "agent")
+  violations: [Violation!]! @derivedFrom(field: "agent")
+}
+
+type Operation @entity {
+  id: ID!
+  agent: Agent!
+  target: Bytes!
+  value: BigDecimal!
+  success: Boolean!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  txHash: Bytes!
+}
+
+type Violation @entity {
+  id: ID!
+  agent: Agent!
+  target: Bytes!
+  selector: Bytes!
+  reason: String!
+  timestamp: BigInt!
+}
+
+type ProtocolStats @entity {
+  id: ID!
+  totalAgents: BigInt!
+  totalOps: BigInt!
+  totalValueMoved: BigDecimal!
+  pauseEvents: BigInt!
+}

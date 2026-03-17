@@ -1,0 +1,72 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: AgentFactory
+    network: polkadot-hub-testnet
+    source:
+      address: "0x0000000000000000000000000000000000000000"
+      abi: AgentFactory
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Agent
+        - ProtocolStats
+      abis:
+        - name: AgentFactory
+          file: ./abis/AgentFactory.json
+      eventHandlers:
+        - event: AgentCreated(indexed address,indexed address,uint8,string)
+          handler: handleAgentCreated
+      file: ./src/mappings.ts
+  - kind: ethereum
+    name: AgentAccount
+    network: polkadot-hub-testnet
+    source:
+      address: "0x0000000000000000000000000000000000000000"
+      abi: AgentAccount
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Operation
+        - Agent
+      abis:
+        - name: AgentAccount
+          file: ./abis/AgentAccount.json
+      eventHandlers:
+        - event: AgentExecuted(indexed address,uint256,bytes,bool)
+          handler: handleAgentExecuted
+        - event: AgentBlocked(indexed address,string)
+          handler: handleAgentBlocked
+      file: ./src/mappings.ts
+  - kind: ethereum
+    name: GuardianPolicy
+    network: polkadot-hub-testnet
+    source:
+      address: "0x0000000000000000000000000000000000000000"
+      abi: GuardianPolicy
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Violation
+        - Agent
+        - ProtocolStats
+      abis:
+        - name: GuardianPolicy
+          file: ./abis/GuardianPolicy.json
+      eventHandlers:
+        - event: PolicyViolation(indexed address,address,bytes4,string)
+          handler: handlePolicyViolation
+        - event: SoftPaused(indexed address)
+          handler: handleSoftPaused
+      file: ./src/mappings.ts
