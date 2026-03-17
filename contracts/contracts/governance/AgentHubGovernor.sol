@@ -24,9 +24,9 @@ contract AgentHubGovernor is
     constructor(
         IVotes _token,
         TimelockController _timelock,
-        /// @param _policyRegistry Placeholder for GuardianPolicy/registry address (goverable via proposal)
+        /// @param _policyRegistry Placeholder for GuardianPolicy/registry address (governable via proposal)
         address _policyRegistry,
-        /// @param _riskTierManager Placeholder for risk-tier manager address (goverable via proposal)
+        /// @param _riskTierManager Placeholder for risk-tier manager address (governable via proposal)
         address _riskTierManager
     )
         Governor("AgentHub Governor")
