@@ -3,14 +3,14 @@
 ## System Overview
 
 ```
-User → Frontend (Next.js) → AI Service (Node.js + OpenAI) → ERC-4337 Bundler
-                                                                     ↓
+User → Frontend (Next.js) → OpenRouter (Gemini 2.5 Flash Lite) → Policy JSON
+                                                               ↓
 Explorer ← Blockscout ← Polkadot Hub EVM ← EntryPoint ← AgentAccount ← GuardianPolicy ← DeFi Protocols
 ```
 
 ## Components
 
-### Smart Contracts (Polkadot Hub Testnet, chainId 420420421)
+### Smart Contracts (Polkadot Hub Testnet, chainId 420420417)
 
 | Contract | Role |
 |----------|------|
@@ -26,14 +26,14 @@ Explorer ← Blockscout ← Polkadot Hub EVM ← EntryPoint ← AgentAccount ←
 
 | Module | Role |
 |--------|------|
-| `PolicyInterpreter` | GPT-4o converts natural language → structured policy |
-| `StrategyExecutor` | Every 10min: reads state → asks GPT-4o → submits UserOp |
+| `PolicyInterpreter` | Gemini 2.5 Flash Lite via OpenRouter converts natural language → structured policy |
+| `StrategyExecutor` | Future automation layer for scheduled strategy execution |
 | `AnomalyDetector` | Watches events, detects gas spikes / consecutive blocks |
 | `UserOperationBuilder` | Constructs and signs ERC-4337 UserOperations |
 | `BundlerClient` | Submits to bundler with exponential backoff |
 | `GuardianChecker` | Pre-validates via eth_call (no gas cost) |
 
-### Frontend (Next.js 14)
+### Frontend (Next.js 15)
 
 | Component | Role |
 |-----------|------|
@@ -58,10 +58,10 @@ Explorer ← Blockscout ← Polkadot Hub EVM ← EntryPoint ← AgentAccount ←
 ## Data Flow
 
 1. User describes strategy in plain English
-2. Frontend POSTs to `/api/policy` → PolicyInterpreter parses via GPT-4o
+2. Frontend POSTs to `/api/policy` → PolicyInterpreter parses via Gemini 2.5 Flash Lite
 3. User reviews and deploys via AgentFactory.createAgent()
 4. StrategyExecutor monitors agent every 10 minutes
-5. GPT-4o generates recommended action
+5. The policy response is reviewed in the UI before deployment
 6. GuardianChecker simulates via eth_call
 7. UserOperationBuilder constructs signed UserOp
 8. BundlerClient submits to ERC-4337 bundler

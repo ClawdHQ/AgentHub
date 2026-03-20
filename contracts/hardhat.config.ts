@@ -21,7 +21,7 @@ const config: HardhatUserConfig = {
     hardhat: {},
     "polkadot-hub-testnet": {
       url: process.env.POLKADOT_HUB_TESTNET_RPC || "https://testnet-passet-hub-eth-rpc.polkadot.io",
-      chainId: 420420421,
+      chainId: 420420417,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
   },
@@ -40,7 +40,7 @@ const config: HardhatUserConfig = {
     customChains: [
       {
         network: "polkadot-hub-testnet",
-        chainId: 420420421,
+        chainId: 420420417,
         urls: {
           apiURL: "https://blockscout-passet-hub.parity-testnet.parity.io/api",
           browserURL: "https://blockscout-passet-hub.parity-testnet.parity.io",

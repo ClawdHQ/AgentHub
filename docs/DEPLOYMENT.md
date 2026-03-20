@@ -11,9 +11,9 @@
 | Property | Value |
 |----------|-------|
 | Network Name | Polkadot Hub Testnet |
-| Chain ID | 420420421 |
-| RPC URL | https://testnet-passet-hub-eth-rpc.polkadot.io |
-| Block Explorer | https://blockscout-passet-hub.parity-testnet.parity.io |
+| Chain ID | 420420417 |
+| RPC URL | https://services.polkadothub-rpc.com/testnet |
+| Block Explorer | https://blockscout-testnet.polkadot.io |
 | Native Token | DOT (18 decimals) |
 | Faucet | https://faucet.polkadot.io |
 
