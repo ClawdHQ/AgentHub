@@ -1,8 +1,21 @@
 import Link from "next/link";
+import AgentCard from "@/components/AgentCard";
+import SiteHeader from "@/components/SiteHeader";
+import { fetchDashboardStats, fetchRecentAgents } from "@/lib/chain-data";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const [stats, recentAgents] = await Promise.all([
+    fetchDashboardStats(),
+    fetchRecentAgents(),
+  ]);
+  const hasOnChainAgents = recentAgents.length > 0 || (!stats.seeded && stats.totalAgents > 0);
+
   return (
     <main className="min-h-screen bg-[#0a0a0a]">
+      <SiteHeader />
+
       {/* Hero Section */}
       <section className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 px-4 py-1 text-sm text-white/60">
@@ -38,10 +51,13 @@ export default function HomePage() {
       <section className="border-t border-white/10 py-8 px-4">
         <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Total Agents", value: "—" },
-            { label: "Total TVL (DOT)", value: "—" },
-            { label: "Ops Today", value: "—" },
-            { label: "Protocols Protected", value: "3" },
+            { label: "Total Agents", value: stats.totalAgents.toLocaleString() },
+            { label: "Total TVL (DOT)", value: stats.totalTvlDot },
+            { label: "Ops Today", value: stats.opsToday.toLocaleString() },
+            {
+              label: stats.seeded ? "Protocols Protected (seeded)" : "Protocols Protected",
+              value: stats.protocolsProtected.toLocaleString(),
+            },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -54,22 +70,64 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Empty State */}
-      <section className="max-w-6xl mx-auto px-4 py-12 text-center">
-        <div className="rounded-xl border border-white/10 p-12">
-          <div className="text-4xl mb-4">🤖</div>
-          <h2 className="text-xl font-semibold mb-2">No agents yet</h2>
-          <p className="text-white/60 mb-6">
-            Create your first AI-controlled DeFi agent
-          </p>
-          <Link
-            href="/agents/new"
-            className="inline-block rounded-lg bg-[#E6007A] px-6 py-3 font-semibold text-white hover:bg-[#E6007A]/80 transition-colors"
-          >
-            Create your first agent
-          </Link>
-        </div>
-      </section>
+      {hasOnChainAgents ? (
+        <section className="max-w-6xl mx-auto px-4 py-12">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold">Live Agents</h2>
+              <p className="mt-1 text-white/60">
+                Latest agent deployments detected on Polkadot Hub Testnet.
+              </p>
+            </div>
+            <Link
+              href="/agents/new"
+              className="inline-block rounded-lg border border-white/10 px-5 py-2.5 font-semibold text-white/80 hover:border-white/30 transition-colors"
+            >
+              Deploy another agent
+            </Link>
+          </div>
+
+          {recentAgents.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {recentAgents.map((agent) => (
+                <AgentCard
+                  key={agent.address}
+                  address={agent.address}
+                  strategyDescription={agent.strategyDescription}
+                  riskTier={agent.riskTier}
+                  active={agent.active}
+                  opsToday={agent.opsToday}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-white/10 p-10 text-center">
+              <div className="text-3xl font-semibold text-[#E6007A]">
+                {stats.totalAgents.toLocaleString()}
+              </div>
+              <p className="mt-2 text-white/60">
+                Agents are live on-chain. Recent deployment events will appear here as new agents are indexed.
+              </p>
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="max-w-6xl mx-auto px-4 py-12 text-center">
+          <div className="rounded-xl border border-white/10 p-12">
+            <div className="text-4xl mb-4">🤖</div>
+            <h2 className="text-xl font-semibold mb-2">No agents yet</h2>
+            <p className="text-white/60 mb-6">
+              Create your first AI-controlled DeFi agent
+            </p>
+            <Link
+              href="/agents/new"
+              className="inline-block rounded-lg bg-[#E6007A] px-6 py-3 font-semibold text-white hover:bg-[#E6007A]/80 transition-colors"
+            >
+              Create your first agent
+            </Link>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

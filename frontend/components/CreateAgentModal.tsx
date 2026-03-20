@@ -1,7 +1,21 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { BaseError, useAccount } from "wagmi";
+import {
+  readContract,
+  waitForTransactionReceipt,
+  writeContract,
+} from "wagmi/actions";
+import { isAddress, parseEventLogs, type Address, type Hex } from "viem";
 import { z } from "zod";
+import { polkadotHubTestnet } from "@/lib/chain";
+import {
+  AGENT_FACTORY_ADDRESS,
+  agentFactoryAbi,
+} from "@/lib/contracts";
+import { wagmiConfig } from "@/lib/wagmi";
 
 const strategySchema = z.string().min(20, "Strategy must be at least 20 characters").max(500, "Strategy must be at most 500 characters");
 
@@ -21,15 +35,36 @@ interface CreateAgentModalProps {
 }
 
 const TIER_LABELS = ["CONSERVATIVE", "MODERATE", "AGGRESSIVE"];
+const BYTES4_REGEX = /^0x[a-fA-F0-9]{8}$/;
+const RECEIPT_TIMEOUT_MS = 75_000;
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof BaseError) {
+    return error.shortMessage || error.message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "Deployment failed. Please try again.";
+}
 
 export default function CreateAgentModal({ open, onClose }: CreateAgentModalProps) {
+  const router = useRouter();
+  const { address, chainId, isConnected } = useAccount();
   const [step, setStep] = useState(1);
   const [strategy, setStrategy] = useState("");
   const [strategyError, setStrategyError] = useState("");
   const [parsedPolicy, setParsedPolicy] = useState<ParsedPolicy | null>(null);
   const [aiSigner, setAiSigner] = useState("");
   const [initialDeposit, setInitialDeposit] = useState("0.1");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deployError, setDeployError] = useState("");
+  const [deployStatus, setDeployStatus] = useState("");
+  const [pendingTxHash, setPendingTxHash] = useState<Hex | null>(null);
+  const [predictedAgentAddress, setPredictedAgentAddress] = useState<Address | null>(null);
 
   if (!open) return null;
 
@@ -40,7 +75,11 @@ export default function CreateAgentModal({ open, onClose }: CreateAgentModalProp
       return;
     }
     setStrategyError("");
-    setIsLoading(true);
+    setDeployError("");
+    setDeployStatus("");
+    setPendingTxHash(null);
+    setPredictedAgentAddress(null);
+    setIsParsing(true);
 
     try {
       const res = await fetch("/api/policy", {
@@ -55,14 +94,145 @@ export default function CreateAgentModal({ open, onClose }: CreateAgentModalProp
     } catch {
       setStrategyError("Failed to parse strategy. Please try again.");
     } finally {
-      setIsLoading(false);
+      setIsParsing(false);
     }
   };
 
   const handleDeploy = async () => {
-    // TODO: Implement actual deployment via wagmi useWriteContract
-    alert("Deployment requires wallet connection");
+    setDeployError("");
+    setDeployStatus("");
+
+    if (!isConnected || !address) {
+      setDeployError("Connect your wallet before deploying an agent.");
+      return;
+    }
+
+    if (chainId !== polkadotHubTestnet.id) {
+      setDeployError(`Switch your wallet to ${polkadotHubTestnet.name} before deploying.`);
+      return;
+    }
+
+    if (!parsedPolicy) {
+      setDeployError("Parse and review a policy before deploying.");
+      return;
+    }
+
+    if (!isAddress(aiSigner)) {
+      setDeployError("Enter a valid AI signer address.");
+      return;
+    }
+
+    if (
+      initialDeposit.trim() &&
+      (!Number.isFinite(Number(initialDeposit)) || Number(initialDeposit) < 0)
+    ) {
+      setDeployError("Enter a valid initial deposit amount.");
+      return;
+    }
+
+    const allowedProtocols = parsedPolicy.allowedProtocols.filter(
+      (protocol): protocol is Address => isAddress(protocol),
+    );
+    if (allowedProtocols.length !== parsedPolicy.allowedProtocols.length || allowedProtocols.length === 0) {
+      setDeployError("The generated policy contains an invalid protocol address.");
+      return;
+    }
+
+    const allowedSelectors = parsedPolicy.allowedSelectors.filter(
+      (selector): selector is Hex => BYTES4_REGEX.test(selector),
+    );
+    if (allowedSelectors.length !== parsedPolicy.allowedSelectors.length) {
+      setDeployError("The generated policy contains an invalid function selector.");
+      return;
+    }
+
+    const aiSignerAddress = aiSigner as Address;
+    let submittedHash: Hex | null = null;
+
+    try {
+      setIsDeploying(true);
+      setDeployStatus("Preparing deployment transaction...");
+      setPendingTxHash(null);
+      setPredictedAgentAddress(null);
+
+      const nextAgentIndex = (await readContract(wagmiConfig, {
+        address: AGENT_FACTORY_ADDRESS,
+        abi: agentFactoryAbi,
+        functionName: "agentCount",
+      })) as bigint;
+
+      const predictedAddress = (await readContract(wagmiConfig, {
+        address: AGENT_FACTORY_ADDRESS,
+        abi: agentFactoryAbi,
+        functionName: "predictAgentAddress",
+        args: [address, nextAgentIndex],
+      })) as Address;
+
+      setPredictedAgentAddress(predictedAddress);
+      setDeployStatus("Waiting for wallet confirmation...");
+
+      const hash = await writeContract(wagmiConfig, {
+        address: AGENT_FACTORY_ADDRESS,
+        abi: agentFactoryAbi,
+        functionName: "createAgent",
+        args: [
+          aiSignerAddress,
+          parsedPolicy.tier,
+          allowedProtocols,
+          allowedSelectors,
+          BigInt(parsedPolicy.maxSingleTxValue),
+          BigInt(parsedPolicy.maxDailyVolume),
+          parsedPolicy.xcmEnabled,
+          strategy,
+        ],
+        account: address,
+        chainId: polkadotHubTestnet.id,
+      });
+
+      submittedHash = hash;
+      setPendingTxHash(hash);
+      setDeployStatus("Transaction submitted. Waiting for chain confirmation...");
+
+      const receipt = (await Promise.race([
+        waitForTransactionReceipt(wagmiConfig, { hash }),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => {
+            reject(
+              new Error(
+                "Transaction was submitted, but receipt confirmation is taking too long on the current RPC. Check Blockscout or open the predicted agent page below.",
+              ),
+            );
+          }, RECEIPT_TIMEOUT_MS);
+        }),
+      ])) as Awaited<ReturnType<typeof waitForTransactionReceipt>>;
+      const [agentCreatedEvent] = parseEventLogs({
+        abi: agentFactoryAbi,
+        eventName: "AgentCreated",
+        logs: receipt.logs,
+      });
+
+      const agentAddress = agentCreatedEvent?.args.agent ?? predictedAddress;
+      if (!agentAddress) {
+        throw new Error("Deployment confirmed, but the new agent address could not be read from the receipt.");
+      }
+
+      setDeployStatus("Deployment confirmed. Redirecting...");
+      onClose();
+      router.push(`/agents/${agentAddress}`);
+      router.refresh();
+    } catch (error) {
+      if (!submittedHash) {
+        setPredictedAgentAddress(null);
+      }
+      setDeployError(getErrorMessage(error));
+    } finally {
+      setIsDeploying(false);
+    }
   };
+
+  const explorerBaseUrl = polkadotHubTestnet.blockExplorers?.default.url;
+  const deploymentPending = Boolean(pendingTxHash) && isDeploying;
+  const canOpenPredictedAgent = Boolean(predictedAgentAddress);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" role="dialog" aria-modal="true" aria-label="Create Agent">
@@ -112,10 +282,10 @@ export default function CreateAgentModal({ open, onClose }: CreateAgentModalProp
             </div>
             <button
               onClick={handleParseStrategy}
-              disabled={isLoading}
+              disabled={isParsing}
               className="w-full bg-[#E6007A] hover:bg-[#E6007A]/80 disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg transition-colors"
             >
-              {isLoading ? "Parsing..." : "Parse with AI →"}
+              {isParsing ? "Parsing..." : "Parse with AI →"}
             </button>
           </div>
         )}
@@ -190,6 +360,9 @@ export default function CreateAgentModal({ open, onClose }: CreateAgentModalProp
                   className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm focus:outline-none focus:border-[#E6007A]"
                   aria-label="Initial Deposit in DOT"
                 />
+                <p className="mt-1 text-xs text-white/40">
+                  Deposit funding is not automated yet. This value is kept here for your deployment plan.
+                </p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -218,10 +391,60 @@ export default function CreateAgentModal({ open, onClose }: CreateAgentModalProp
                 <span>{initialDeposit} DOT</span>
               </div>
             </div>
+            {!isConnected && (
+              <div className="mb-4 rounded-lg border border-yellow-400/20 bg-yellow-400/10 p-3 text-xs text-yellow-300">
+                Connect your wallet in the header to submit the deployment transaction.
+              </div>
+            )}
+            {isConnected && chainId !== polkadotHubTestnet.id && (
+              <div className="mb-4 rounded-lg border border-yellow-400/20 bg-yellow-400/10 p-3 text-xs text-yellow-300">
+                Switch your wallet network to {polkadotHubTestnet.name} before deploying.
+              </div>
+            )}
+            {deployError && (
+              <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-xs text-red-300">
+                {deployError}
+              </div>
+            )}
+            {deployStatus && (
+              <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/75">
+                {deployStatus}
+              </div>
+            )}
+            {deploymentPending && (
+              <div className="mb-4 rounded-lg border border-[#E6007A]/20 bg-[#E6007A]/10 p-3 text-xs text-white/80">
+                Deployment transaction submitted.
+                {explorerBaseUrl && pendingTxHash ? (
+                  <a
+                    href={`${explorerBaseUrl}/tx/${pendingTxHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="ml-1 text-[#ff5ab5] underline underline-offset-2"
+                  >
+                    View on Blockscout
+                  </a>
+                ) : null}
+              </div>
+            )}
+            {!isDeploying && canOpenPredictedAgent && (
+              <div className="mb-4 rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/75">
+                If the transaction already succeeded on-chain, you can open the predicted agent page now.
+                <button
+                  onClick={() => router.push(`/agents/${predictedAgentAddress}`)}
+                  className="ml-2 text-[#ff5ab5] underline underline-offset-2"
+                >
+                  Open agent page
+                </button>
+              </div>
+            )}
             <div className="flex gap-2">
               <button onClick={() => setStep(3)} className="flex-1 border border-white/10 py-2.5 rounded-lg text-sm">Back</button>
-              <button onClick={handleDeploy} className="flex-1 bg-[#E6007A] text-white font-semibold py-2.5 rounded-lg">
-                Deploy Agent
+              <button
+                onClick={handleDeploy}
+                disabled={isDeploying}
+                className="flex-1 bg-[#E6007A] disabled:opacity-50 text-white font-semibold py-2.5 rounded-lg"
+              >
+                {isDeploying ? "Waiting for Confirmation..." : "Deploy Agent"}
               </button>
             </div>
           </div>

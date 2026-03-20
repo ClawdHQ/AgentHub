@@ -9,14 +9,14 @@ export const ENTRY_POINT_ADDRESS =
   "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789" as const;
 
 // Chain ID for Polkadot Hub Testnet
-export const CHAIN_ID = 420420421;
+export const CHAIN_ID = 420420417;
 
 // Testnet faucet URL
 export const FAUCET_URL = "https://faucet.polkadot.io";
 
 // Block explorer
 export const EXPLORER_URL =
-  "https://blockscout-passet-hub.parity-testnet.parity.io";
+  "https://blockscout-testnet.polkadot.io";
 
 /**
  * Format a DOT value from wei to human-readable
