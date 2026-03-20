@@ -5,7 +5,7 @@
 [![CI](https://github.com/ClawdHQ/AgentHub/actions/workflows/test.yml/badge.svg)](https://github.com/ClawdHQ/AgentHub/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.26-blue)](https://soliditylang.org)
-[![Network](https://img.shields.io/badge/Network-Polkadot%20Hub%20Testnet-E6007A)](https://blockscout-passet-hub.parity-testnet.parity.io)
+[![Network](https://img.shields.io/badge/Network-Polkadot%20Hub%20Testnet-E6007A)](https://blockscout-testnet.polkadot.io)
 
 AgentHub lets users deploy autonomous AI-powered DeFi agents that execute trading and staking strategies on-chain — with every action guarded by smart-contract-enforced risk policies. Describe your strategy in plain English; the platform translates it into structured guardrails, deploys a self-contained smart account, and runs it continuously with full on-chain auditability.
 
@@ -43,15 +43,15 @@ AgentHub is a three-layer platform:
 
 | Layer | What it does |
 |-------|-------------|
-| **Smart Contracts** | ERC-4337 smart accounts (one per agent), a risk-enforcement Guardian, and AHT-token governance — all deployed on Polkadot Hub Testnet (chainId 420420421) |
-| **AI Agent Service** | A Node.js + TypeScript service that runs each strategy on a 10-minute cadence, powered by GPT-4o for decision-making and an anomaly detector for automatic pausing |
-| **Frontend Dashboard** | A Next.js 15 web app where users create agents with a 4-step wizard, monitor activity, and participate in governance |
+| **Smart Contracts** | ERC-4337 smart accounts (one per agent), a risk-enforcement Guardian, and AHT-token governance — all deployed on Polkadot Hub Testnet (chainId 420420417) |
+| **AI Policy Layer** | A Next.js server route that turns plain-English strategies into typed on-chain policies via OpenRouter using Gemini 2.5 Flash Lite |
+| **Frontend Dashboard** | A Next.js 15 web app where users create agents with a 4-step wizard, monitor live agents, and participate in governance |
 
 ---
 
 ## Features
 
-- **Natural-language policies** — describe a strategy in plain English; GPT-4o converts it to a typed, on-chain-verifiable policy (tier, limits, allowed protocols)
+- **Natural-language policies** — describe a strategy in plain English; Gemini 2.5 Flash Lite via OpenRouter converts it to a typed, on-chain-verifiable policy (tier, limits, allowed protocols)
 - **Guardian risk enforcement** — `GuardianPolicy` validates every user operation twice (in `validateUserOp` and `execute`) before any funds move
 - **Two-tier pause system** — *soft pause* blocks new transactions (withdrawals still allowed); *hard pause* halts everything; both are triggered automatically by the anomaly detector
 - **ERC-4337 account abstraction** — each agent is its own smart account; gas is sponsored via a bundler, so the agent's owner never needs to manage gas manually
@@ -65,18 +65,18 @@ AgentHub is a three-layer platform:
 ## Architecture
 
 ```
-User → Frontend (Next.js) → AI Service (Node.js + OpenAI) → ERC-4337 Bundler
-                                                                     ↓
-Explorer ← Blockscout ← Polkadot Hub EVM ← EntryPoint ← AgentAccount ← GuardianPolicy ← DeFi Protocols
+User → Frontend (Next.js) → OpenRouter (Gemini 2.5 Flash Lite) → Policy JSON
+                                                               ↓
+Explorer ← Blockscout ← Polkadot Hub EVM ← EntryPoint ← AgentFactory / AgentAccount ← GuardianPolicy
 ```
 
 ### Data Flow
 
 1. User describes a strategy in plain English
-2. Frontend POSTs to `/api/policy` → `PolicyInterpreter` parses it via GPT-4o
+2. Frontend POSTs to `/api/policy` → Gemini 2.5 Flash Lite via OpenRouter parses it into a typed policy
 3. User reviews and deploys via `AgentFactory.createAgent()`
-4. `StrategyExecutor` polls the agent every 10 minutes
-5. GPT-4o recommends the next action
+4. The deployed agent is visible immediately on the dashboard and detail pages
+5. Future automated execution can plug into the same guarded contract stack
 6. `GuardianChecker` simulates the operation via `eth_call` (no gas cost)
 7. `UserOperationBuilder` constructs and signs the `UserOperation`
 8. `BundlerClient` submits to the ERC-4337 bundler (with exponential-backoff retry)
@@ -105,7 +105,7 @@ For a deeper dive, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 |-----------|---------|---------|
 | Node.js | v20+ | Runtime |
 | TypeScript | 5.4.5 | Language |
-| OpenAI SDK | 4.47.1 | GPT-4o for policy interpretation and strategy execution |
+| OpenAI SDK | 4.47.1 | LLM client for the agent-service scaffold |
 | Viem | 2.13.5 | Lightweight EVM library |
 | Ethers.js | 6.13.0 | Contract calls and signing |
 | Pino | 9.2.0 | Structured JSON logging |
@@ -115,8 +115,9 @@ For a deeper dive, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 |-----------|---------|---------|
 | Next.js | 15.5.13 | Full-stack React framework (App Router) |
 | React | 18 | UI library |
-| Wagmi | 2.14.15 | Wallet integration and Ethereum hooks |
-| Viem | 2.23.15 | Lightweight EVM client |
+| RainbowKit | 2.2.8 | Wallet connection UI |
+| Wagmi | 2.19.5 | Wallet integration and Ethereum hooks |
+| Viem | 2.38.3 | Lightweight EVM client |
 | TanStack React Query | 5.74.3 | Server-state management |
 | Tailwind CSS | 3.4.1 | Utility-first styling |
 | Zod | 3.25.76 | Schema validation |
@@ -132,11 +133,22 @@ For a deeper dive, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | Property | Value |
 |----------|-------|
 | Network | Polkadot Hub Testnet |
-| Chain ID | 420420421 |
-| RPC URL | https://testnet-passet-hub-eth-rpc.polkadot.io |
-| Block Explorer | https://blockscout-passet-hub.parity-testnet.parity.io |
+| Chain ID | 420420417 |
+| RPC URL | https://services.polkadothub-rpc.com/testnet |
+| Block Explorer | https://blockscout-testnet.polkadot.io |
 | Native Token | DOT (18 decimals) |
 | Faucet | https://faucet.polkadot.io |
+
+### Current deployed addresses
+
+These are the live addresses currently configured by the frontend:
+
+| Contract | Address |
+|----------|---------|
+| `AgentFactory` | `0x4344e79d2f5d660cbBC8bdDC497B86eD3951d828` |
+| `GuardianPolicy` | `0x16B869b99619b0D1886b7A55898C66246510f3A0` |
+| `AgentHubGovernor` | `0xCbC2863De6b856C848848990DCac0610e60F796B` |
+| `EntryPoint` | `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789` |
 
 ---
 
@@ -148,7 +160,7 @@ For a deeper dive, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **npm** (bundled with Node.js)
 - **MetaMask** (or any EVM-compatible wallet)
 - **DOT** on Polkadot Hub Testnet — get test tokens from the [faucet](https://faucet.polkadot.io)
-- **OpenAI API key** for GPT-4o
+- **OpenRouter API key** for Gemini 2.5 Flash Lite
 - **WalletConnect Project ID** — create one free at [cloud.walletconnect.com](https://cloud.walletconnect.com)
 
 ---
@@ -175,7 +187,7 @@ Edit `.env`:
 ```env
 PRIVATE_KEY=0x<your_deployer_private_key>
 # Optional overrides (defaults shown):
-POLKADOT_HUB_TESTNET_RPC=https://testnet-passet-hub-eth-rpc.polkadot.io
+POLKADOT_HUB_TESTNET_RPC=https://services.polkadothub-rpc.com/testnet
 REPORT_GAS=true
 ```
 
@@ -215,7 +227,7 @@ GUARDIAN_POLICY_ADDRESS=0x...
 AGENT_FACTORY_ADDRESS=0x...
 ENTRY_POINT_ADDRESS=0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
 
-RPC_URL=https://testnet-passet-hub-eth-rpc.polkadot.io
+RPC_URL=https://services.polkadothub-rpc.com/testnet
 BUNDLER_URL=http://localhost:3000/rpc
 
 LOG_LEVEL=info
@@ -239,13 +251,16 @@ cp .env.example .env.local
 Edit `.env.local`:
 
 ```env
-NEXT_PUBLIC_CHAIN_ID=420420421
-NEXT_PUBLIC_AGENT_FACTORY_ADDRESS=0x...
-NEXT_PUBLIC_GUARDIAN_POLICY_ADDRESS=0x...
-NEXT_PUBLIC_GOVERNOR_ADDRESS=0x...
+NEXT_PUBLIC_CHAIN_ID=420420417
+NEXT_PUBLIC_AGENT_FACTORY_ADDRESS=0x4344e79d2f5d660cbBC8bdDC497B86eD3951d828
+NEXT_PUBLIC_GUARDIAN_POLICY_ADDRESS=0x16B869b99619b0D1886b7A55898C66246510f3A0
+NEXT_PUBLIC_GOVERNOR_ADDRESS=0xCbC2863De6b856C848848990DCac0610e60F796B
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=<your_walletconnect_project_id>
 NEXT_PUBLIC_SUBGRAPH_URL=https://api.studio.thegraph.com/query/0/agenthub/version/latest
-OPENAI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_MODEL=google/gemini-2.5-flash-lite
+OPENROUTER_SITE_URL=http://localhost:3000
+OPENROUTER_APP_NAME=AgentHub
 ```
 
 ```bash
@@ -273,7 +288,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENAI_API_KEY` | ✅ | GPT-4o API key |
+| `OPENAI_API_KEY` | ✅ | LLM API key used by the agent-service scaffold |
 | `AI_SIGNER_PRIVATE_KEY` | ✅ | Wallet that signs `UserOperation`s |
 | `WATCHER_PRIVATE_KEY` | ✅ | Wallet used by `AnomalyDetector` |
 | `GUARDIAN_POLICY_ADDRESS` | ✅ | Deployed `GuardianPolicy` address |
@@ -287,13 +302,16 @@ Open [http://localhost:3000](http://localhost:3000).
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXT_PUBLIC_CHAIN_ID` | ✅ | Target chain ID (`420420421`) |
+| `NEXT_PUBLIC_CHAIN_ID` | ✅ | Target chain ID (`420420417`) |
 | `NEXT_PUBLIC_AGENT_FACTORY_ADDRESS` | ✅ | Deployed `AgentFactory` address |
 | `NEXT_PUBLIC_GUARDIAN_POLICY_ADDRESS` | ✅ | Deployed `GuardianPolicy` address |
 | `NEXT_PUBLIC_GOVERNOR_ADDRESS` | ✅ | Deployed `AgentHubGovernor` address |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | ✅ | WalletConnect Cloud project ID |
 | `NEXT_PUBLIC_SUBGRAPH_URL` | ✅ | The Graph subgraph endpoint |
-| `OPENAI_API_KEY` | ✅ | GPT-4o key (used by Next.js API routes, server-side only) |
+| `OPENROUTER_API_KEY` | ✅ | OpenRouter API key (used by Next.js API routes, server-side only) |
+| `OPENROUTER_MODEL` | ❌ | OpenRouter model slug for policy parsing |
+| `OPENROUTER_SITE_URL` | ❌ | Referrer header sent to OpenRouter |
+| `OPENROUTER_APP_NAME` | ❌ | App name sent to OpenRouter |
 
 ---
 
@@ -352,7 +370,7 @@ Every push and pull request to `main` triggers the [test workflow](.github/workf
 
 ### `POST /api/policy` — Interpret Strategy
 
-Converts a plain-English trading strategy into a structured on-chain policy using GPT-4o.
+Converts a plain-English trading strategy into a structured on-chain policy using Gemini 2.5 Flash Lite via OpenRouter.
 
 **Request**
 ```json
@@ -370,7 +388,8 @@ Converts a plain-English trading strategy into a structured on-chain policy usin
   "allowedProtocols": ["0x0000000000000000000000000000000000000804"],
   "allowedSelectors": ["0x12345678"],
   "xcmEnabled": false,
-  "reasoning": "Conservative tier applied based on the strategy description."
+  "reasoning": "Conservative tier applied based on the strategy description.",
+  "model": "google/gemini-2.5-flash-lite"
 }
 ```
 
